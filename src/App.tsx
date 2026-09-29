@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { calculateInvestment } from "./lib/investmentEngine";
 import {
@@ -24,23 +24,11 @@ const modes: { value: CalculationMode; label: string }[] = [
   { value: "startingAmount", label: "算初始本金" },
   { value: "years", label: "算投资期限" },
 ];
-const defaults: InvestmentInput = {
-  mode: "endAmount",
-  startingAmount: 20000,
-  contribution: 1000,
-  returnRate: 0.06,
-  years: 10,
-  compoundFrequency: "annually",
-  contributionFrequency: "monthly",
-  contributionTiming: "end",
-};
-const initial = calculateInvestment(defaults);
-
 export default function App() {
   const [mode, setMode] = useState<CalculationMode>("endAmount");
   const [values, setValues] = useState<Record<CalculationMode, string>>({
     startingAmount: "20,000",
-    endAmount: String(initial.ok ? initial.result.endAmount : 198290.396358),
+    endAmount: "",
     contribution: "1,000",
     returnRate: "6",
     years: "10",
@@ -51,9 +39,7 @@ export default function App() {
     useState<ContributionFrequency>("monthly");
   const [contributionTiming, setContributionTiming] =
     useState<ContributionTiming>("end");
-  const [result, setResult] = useState<InvestmentResult | null>(
-    initial.ok ? initial.result : null,
-  );
+  const [result, setResult] = useState<InvestmentResult | null>(null);
   const [error, setError] = useState<CalculationError | null>(null);
   const [dirty, setDirty] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -95,15 +81,15 @@ export default function App() {
     money?: boolean;
   }[] = [
     { name: "startingAmount", label: "初始本金", unit: "元", money: true },
-    { name: "endAmount", label: "目标期末金额", unit: "元", money: true },
+    { name: "endAmount", label: "期末金额", unit: "元", money: true },
+    { name: "returnRate", label: "年化收益率", unit: "%" },
+    { name: "years", label: "投资期限", unit: "年" },
     {
       name: "contribution",
       label: `每${contributionFrequency === "monthly" ? "月" : "年"}追加投入`,
       unit: "元",
       money: true,
     },
-    { name: "returnRate", label: "年化收益率", unit: "%" },
-    { name: "years", label: "投资期限", unit: "年" },
   ];
 
   function submit(event: FormEvent) {
@@ -135,13 +121,6 @@ export default function App() {
       setError(null);
       setDirty(false);
       setRevision((value) => value + 1);
-      // Preserve the unrounded solved value for subsequent mode changes and round trips.
-      setValues((current) => ({
-        ...current,
-        [mode]: String(
-          outcome.result.solvedValue * (mode === "returnRate" ? 100 : 1),
-        ),
-      }));
     } else {
       setResult(null);
       setError(outcome.error);
@@ -189,23 +168,41 @@ export default function App() {
               <span>填写已知条件</span>
             </div>
             <div className="input-grid">
-              {fields
-                .filter((field) => field.name !== mode)
-                .map((field) => (
-                  <div className="field" key={field.name}>
+              {fields.map((field) => (
+                <Fragment key={field.name}>
+                  {field.name === "contribution" && (
+                    <div className="field">
+                      <label htmlFor="contributionFrequency">追加投入频率</label>
+                      <select
+                        id="contributionFrequency"
+                        value={contributionFrequency}
+                        onChange={(event) => {
+                          setContributionFrequency(event.target.value as ContributionFrequency);
+                          markDirty();
+                        }}
+                      >
+                        <option value="monthly">每月</option>
+                        <option value="yearly">每年</option>
+                      </select>
+                    </div>
+                  )}
+                  <div className="field">
                     <label htmlFor={field.name}>{field.label}</label>
                     <div
-                      className={`input-wrap ${error?.field === field.name ? "invalid" : ""}`}
+                      className={`input-wrap ${mode === field.name ? "pending" : ""} ${error?.field === field.name ? "invalid" : ""}`}
                     >
                       <input
                         id={field.name}
                         name={field.name}
                         type="text"
-                        inputMode="decimal"
+                        inputMode={field.name === "contribution" || field.name === "returnRate" ? "text" : "decimal"}
+                        disabled={mode === field.name}
                         autoComplete="off"
                         spellCheck={false}
                         value={
-                          focusedField === field.name
+                          mode === field.name
+                            ? "待计算"
+                            : focusedField === field.name
                             ? values[field.name]
                             : displayNumericInput(
                                 values[field.name],
@@ -217,15 +214,15 @@ export default function App() {
                         aria-describedby={
                           error?.field === field.name
                             ? "calculation-error"
-                            : undefined
+                            : field.name === "contribution" ? "contribution-note" : undefined
                         }
                         onFocus={() => {
                           setFocusedField(field.name);
                           if (field.money)
                             setValues((current) => ({
                               ...current,
-                              [field.name]: current[field.name].replaceAll(
-                                ",",
+                              [field.name]: current[field.name].replace(
+                                /,/g,
                                 "",
                               ),
                             }));
@@ -251,8 +248,12 @@ export default function App() {
                       <span>{field.unit}</span>
                     </div>
                   </div>
+                </Fragment>
                 ))}
             </div>
+            <p className="input-note" id="contribution-note">追加投入可填负数，表示每期从资产中提取花销。</p>
+            <details className="advanced-options">
+              <summary>高级选项</summary>
             <div className="settings-grid">
               <div className="field">
                 <label htmlFor="compoundFrequency">复利频率</label>
@@ -268,22 +269,6 @@ export default function App() {
                 >
                   <option value="annually">每年</option>
                   <option value="monthly">每月</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="contributionFrequency">追加投入频率</label>
-                <select
-                  id="contributionFrequency"
-                  value={contributionFrequency}
-                  onChange={(event) => {
-                    setContributionFrequency(
-                      event.target.value as ContributionFrequency,
-                    );
-                    markDirty();
-                  }}
-                >
-                  <option value="monthly">每月追加</option>
-                  <option value="yearly">每年追加</option>
                 </select>
               </div>
               <div className="field timing-field">
@@ -310,6 +295,7 @@ export default function App() {
               · {contributionFrequency === "monthly" ? "每月" : "每年"}
               {contributionTiming === "end" ? "期末" : "期初"}投入
             </p>
+            </details>
             {error && (
               <p role="alert" id="calculation-error" className="error-message">
                 {error.message}
@@ -347,7 +333,9 @@ export default function App() {
         ) : (
           !error && (
             <p className="empty-result">
-              参数已更新，点击「开始计算」查看结果。
+              {dirty
+                ? "参数已更新，点击「开始计算」查看结果。"
+                : "填写参数并点击「开始计算」查看结果。"}
             </p>
           )
         )}

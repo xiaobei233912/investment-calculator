@@ -76,6 +76,10 @@ export function validateInput(
           field,
         };
       }
+    } else if (field === "contribution") {
+      if (Math.abs(value) > LIMITS.amount) {
+        return { code: "OUT_OF_RANGE", message: "每期追加或提取金额的绝对值不能超过 1,000 万亿元。", field };
+      }
     } else if (value < 0 || value > LIMITS.amount) {
       return {
         code: "OUT_OF_RANGE",

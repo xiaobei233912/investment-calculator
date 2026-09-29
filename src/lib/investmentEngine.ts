@@ -51,6 +51,17 @@ function factors(plan: Plan, years = plan.years) {
 /** Internal evaluation may return +Infinity while bracketing; it never escapes the public API. */
 function futureValue(plan: Plan, years = plan.years): number {
   if (years === 0) return plan.startingAmount;
+  if (plan.contribution < 0) {
+    // Algebraically identical annuity, avoiding Infinity - Infinity when withdrawals
+    // and principal compound together (including an equilibrium balance).
+    const x = periodLogGrowth(plan);
+    const n = years * periodsPerYear(plan.contributionFrequency);
+    if (x === 0) return plan.startingAmount + plan.contribution * n;
+    const change = plan.startingAmount * Math.expm1(x) + plan.contribution *
+      (plan.contributionTiming === "beginning" ? Math.exp(x) : 1);
+    if (change === 0) return plan.startingAmount;
+    return plan.startingAmount + change * (Math.expm1(n * x) / Math.expm1(x));
+  }
   const { growth, annuity } = factors(plan, years);
   return (
     (plan.startingAmount === 0 ? 0 : plan.startingAmount * growth) +
@@ -58,22 +69,33 @@ function futureValue(plan: Plan, years = plan.years): number {
   );
 }
 
-function checkedAmount(value: number): number {
-  if (!Number.isFinite(value) || value > LIMITS.amount) {
+function checkedAmount(value: number, signed = false): number {
+  if (!Number.isFinite(value) || Math.abs(value) > LIMITS.amount) {
     fail(
       "OVERFLOW",
       "计算金额超出支持范围（1,000 万亿元），请降低金额、收益率或投资期限。",
     );
   }
-  if (value < 0) fail("NO_SOLUTION");
+  if (value < 0 && !signed) fail("NO_SOLUTION");
   return value;
+}
+
+function checkedBalance(plan: Plan, years = plan.years): number {
+  const value = futureValue(plan, years);
+  if (plan.contribution < 0 && value < 0) {
+    // Only absorb machine cancellation at a solved zero balance, never round money.
+    const noise = 16 * Number.EPSILON * Math.max(1, plan.startingAmount);
+    if (value >= -noise) return 0;
+    fail("NO_SOLUTION", "资产不足以支撑当前期限内的提取，请减少提取金额、缩短期限或增加本金。");
+  }
+  return checkedAmount(value);
 }
 
 /** Validated forward function for platform adapters that do not need a full result. */
 export function calculateFutureValue(plan: Plan): number {
   const error = validateInput({ ...plan, mode: "endAmount" });
   if (error) throw new EngineError(error);
-  return checkedAmount(futureValue(plan));
+  return checkedBalance(plan);
 }
 
 const MAX_ITERATIONS = 240;
@@ -84,6 +106,7 @@ function bisect(
   target: number,
   low: number,
   high: number,
+  fromBelow = false,
 ): number {
   const increasing = fn(high) > fn(low);
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
@@ -91,10 +114,16 @@ function bisect(
     const value = fn(middle);
     if (
       Math.abs(value - target) <=
-      Math.max(Number.MIN_VALUE, Math.abs(target) * RELATIVE_TOLERANCE)
+      Math.max(Number.MIN_VALUE, Math.abs(target) * RELATIVE_TOLERANCE) &&
+      (!fromBelow || value <= target)
     )
       return middle;
     if (middle === low || middle === high) {
+      if (fromBelow) {
+        const candidate = increasing ? low : high;
+        if (Math.abs(fn(candidate) - target) <= Math.max(1e-8, Math.abs(target) * 1e-10))
+          return candidate;
+      }
       if (Math.abs(value - target) <= Math.max(1e-8, Math.abs(target) * 1e-10))
         return middle;
       fail("CONVERGENCE", "当前参数接近数值边界，无法可靠求解，请调整输入。");
@@ -106,6 +135,7 @@ function bisect(
 }
 
 function solveRate(plan: Plan, target: number): number {
+  if (plan.contribution < 0) return solveWithdrawalRate(plan, target);
   const n = plan.years * periodsPerYear(plan.contributionFrequency);
   if (plan.startingAmount === 0 && plan.contribution === 0) {
     fail(
@@ -193,6 +223,63 @@ function solveRate(plan: Plan, target: number): number {
   return toRate(bisect(evaluate, target, lower, high));
 }
 
+/** Withdrawals use the same annuity, evaluated as present value to avoid large
+ * positive/negative future-value cancellation. Ordinary cash flows have one root;
+ * fractional due annuities can have two and must be split at their minimum PV. */
+function solveWithdrawalRate(plan: Plan, target: number): number {
+  const n = plan.years * periodsPerYear(plan.contributionFrequency);
+  const due = plan.contributionTiming === "beginning";
+  const p = periodsPerYear(plan.contributionFrequency);
+  const annual = plan.compoundFrequency === "annually";
+  const toLog = (r: number) => (annual ? Math.log1p(r) : 12 * Math.log1p(r / 12)) / p;
+  const toRate = (x: number) => annual ? Math.expm1(x * p) : 12 * Math.expm1(x * p / 12);
+  const low = toLog(-1 + Number.EPSILON);
+  const high = toLog(LIMITS.maxReturnRate);
+  const withdrawal = -plan.contribution;
+  const evaluate = (x: number) => {
+    const annuityPV = x === 0 ? n : -Math.expm1(-n * x) / Math.expm1(x);
+    return withdrawal * annuityPV * (due ? Math.exp(x) : 1) +
+      (target === 0 ? 0 : target * Math.exp(-n * x));
+  };
+  if (due && n === 1 && target === 0) {
+    fail(plan.startingAmount === withdrawal ? "NON_UNIQUE" : "NO_SOLUTION",
+      "仅一次期初提取且目标为零，无法确定唯一收益率。");
+  }
+  if (plan.startingAmount === 0) fail("NO_SOLUTION");
+  if (due && n < 1 && target > 0) {
+    // PV has at most one minimum for a fractional annuity due with withdrawals.
+    let a = low;
+    let b = high;
+    const ratio = (Math.sqrt(5) - 1) / 2;
+    let c = b - ratio * (b - a);
+    let d = a + ratio * (b - a);
+    for (let iteration = 0; iteration < 160 && b - a > 1e-13; iteration++) {
+      if (evaluate(c) < evaluate(d)) {
+        b = d; d = c; c = b - ratio * (b - a);
+      } else {
+        a = c; c = d; d = a + ratio * (b - a);
+      }
+    }
+    const minimum = (a + b) / 2;
+    const minValue = evaluate(minimum);
+    const principal = plan.startingAmount;
+    if (principal < minValue) fail("NO_SOLUTION");
+    const left = principal <= evaluate(low);
+    const right = principal <= evaluate(high);
+    if (left && right) fail("NON_UNIQUE", "不足一个提取周期时，这组参数可能对应多个收益率，请调整期限或提取金额。");
+    if (!left && !right) fail("NO_SOLUTION");
+    return toRate(bisect(evaluate, principal, left ? low : minimum, left ? minimum : high));
+  }
+  const atLow = evaluate(low);
+  const atHigh = evaluate(high);
+  if (plan.startingAmount < Math.min(atLow, atHigh) || plan.startingAmount > Math.max(atLow, atHigh))
+    fail("NO_SOLUTION", "在支持的年化收益率范围内，无法满足当前提取金额与目标期末金额。");
+  if (evaluate(0) === plan.startingAmount) return 0;
+  // For a zero terminal target, approach from a PV no greater than available
+  // principal so the solver's accepted residual does not imply a tiny overdraft.
+  return toRate(bisect(evaluate, plan.startingAmount, low, high, target === 0));
+}
+
 function solveYears(plan: Plan, target: number): number {
   const p = periodsPerYear(plan.contributionFrequency);
   const x = periodLogGrowth(plan);
@@ -244,9 +331,10 @@ function buildResult(
   mode: InvestmentInput["mode"],
   plan: Plan,
 ): InvestmentResult {
-  const endAmount = checkedAmount(futureValue(plan));
+  const endAmount = checkedBalance(plan);
   const totalContributions = checkedAmount(
     plan.contribution * periodsPerYear(plan.contributionFrequency) * plan.years,
+    true,
   );
   const parameters = { ...plan, endAmount };
   const annualBreakdown: InvestmentResult["annualBreakdown"] = [];
@@ -262,7 +350,7 @@ function buildResult(
     const endpoint = finalRow ? plan.years : year;
     const assets = finalRow
       ? endAmount
-      : checkedAmount(futureValue(plan, endpoint));
+      : checkedBalance(plan, endpoint);
     const cumulative = finalRow
       ? totalContributions
       : plan.contribution *
@@ -279,7 +367,7 @@ function buildResult(
     chartData.push({
       year: endpoint,
       assets,
-      invested: checkedAmount(plan.startingAmount + cumulative),
+      invested: checkedAmount(plan.startingAmount + cumulative, true),
     });
     previousYear = endpoint;
     previousAssets = assets;
@@ -344,12 +432,7 @@ export function calculateInvestment(
         )
           fail("OVERFLOW");
         const remainder = input.endAmount - plan.startingAmount * growth;
-        plan.contribution =
-          remainder < 0 &&
-          Math.abs(remainder) <=
-            Number.EPSILON * Math.max(1, input.endAmount) * 8
-            ? 0
-            : checkedAmount(remainder / annuity);
+        plan.contribution = checkedAmount(remainder / annuity, true);
         break;
       }
       case "returnRate":

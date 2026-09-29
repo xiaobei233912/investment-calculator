@@ -6,7 +6,7 @@ import {
   formatYears,
 } from "../lib/investmentFormatting";
 
-export function GrowthChart({ data }: { data: GrowthPoint[] }) {
+export function GrowthChart({ data, withdrawals = false }: { data: GrowthPoint[]; withdrawals?: boolean }) {
   const [selected, setSelected] = useState(data.length - 1);
   const titleId = useId();
   const width = 600;
@@ -15,13 +15,16 @@ export function GrowthChart({ data }: { data: GrowthPoint[] }) {
   const right = 12;
   const top = 20;
   const bottom = 38;
-  const maxYear = data.at(-1)!.year;
+  const maxYear = data[data.length - 1].year;
   const maxAmount =
-    Math.max(1, ...data.flatMap((point) => [point.assets, point.invested])) *
+    data.reduce((max, point) => Math.max(max, point.assets, point.invested), 1) *
     1.08;
+  const minAmount = data.reduce((min, point) => Math.min(min, point.assets, point.invested), 0) * 1.08;
+  const investedLabel = withdrawals ? "累计净投入" : "累计投入本金";
+  const tickAmount = (tick: number) => minAmount + (maxAmount - minAmount) * tick;
   const x = (year: number) => left + (year / maxYear) * (width - left - right);
   const y = (amount: number) =>
-    height - bottom - (amount / maxAmount) * (height - top - bottom);
+    height - bottom - ((amount - minAmount) / (maxAmount - minAmount)) * (height - top - bottom);
   const path = (key: "assets" | "invested") =>
     data
       .map(
@@ -44,26 +47,26 @@ export function GrowthChart({ data }: { data: GrowthPoint[] }) {
         </span>
         <span>
           <i className="legend-invested" />
-          累计投入本金
+          {investedLabel}
         </span>
       </div>
       <svg
         className="growth-chart"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="资产增长曲线，展示总资产与累计投入本金。可用下方滑块查看各年金额。"
+        aria-label={`资产增长曲线，展示总资产与${investedLabel}。可用下方滑块查看各年金额。`}
       >
         {ticks.map((tick) => (
           <g key={tick}>
             <line
               x1={left}
               x2={width - right}
-              y1={y(maxAmount * tick)}
-              y2={y(maxAmount * tick)}
+              y1={y(tickAmount(tick))}
+              y2={y(tickAmount(tick))}
               className="grid-line"
             />
-            <text x={left - 10} y={y(maxAmount * tick) + 4} textAnchor="end">
-              {formatAxisAmount(maxAmount * tick)}
+            <text x={left - 10} y={y(tickAmount(tick)) + 4} textAnchor="end">
+              {formatAxisAmount(tickAmount(tick))}
             </text>
             <text
               x={x(maxYear * tick)}
@@ -106,14 +109,14 @@ export function GrowthChart({ data }: { data: GrowthPoint[] }) {
         step="1"
         value={Math.min(selected, data.length - 1)}
         onChange={(event) => setSelected(Number(event.target.value))}
-        aria-valuetext={`第 ${formatYears(active.year)} 年，总资产 ${formatAmount(active.assets)}，累计投入本金 ${formatAmount(active.invested)}`}
+        aria-valuetext={`第 ${formatYears(active.year)} 年，总资产 ${formatAmount(active.assets)}，${investedLabel} ${formatAmount(active.invested)}`}
       />
       <div className="chart-readout">
         <span>
           总资产<strong>{formatAmount(active.assets)}</strong>
         </span>
         <span>
-          累计投入本金<strong>{formatAmount(active.invested)}</strong>
+          {investedLabel}<strong>{formatAmount(active.invested)}</strong>
         </span>
       </div>
     </section>

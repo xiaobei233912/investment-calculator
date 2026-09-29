@@ -1,7 +1,7 @@
 {
   "name": "investment-calculator",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -9,7 +9,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "build:minitool": "tsc --noEmit && vite build --mode minitool",
+    "audit:minitool": "node scripts/audit-minitool.mjs dist-minitool"
   },
   "dependencies": {
     "react": "^19.2.0",

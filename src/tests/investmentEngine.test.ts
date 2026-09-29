@@ -202,7 +202,7 @@ describe("zero, near zero, negative and large values", () => {
 describe("invalid, impossible and non-unique cases", () => {
   it.each([
     { startingAmount: -1 },
-    { contribution: -1 },
+    { contribution: -1e16 },
     { years: 0 },
     { years: -1 },
     { returnRate: -1 },
@@ -249,7 +249,7 @@ describe("invalid, impossible and non-unique cases", () => {
       endAmount: 1000,
     },
     { mode: "startingAmount", endAmount: 10 },
-    { mode: "contribution", endAmount: 10 },
+    { mode: "contribution", endAmount: -10 },
     { mode: "endAmount", years: 1000, returnRate: 100 },
     {
       mode: "returnRate",

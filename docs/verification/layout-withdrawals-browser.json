@@ -1,0 +1,62 @@
+[
+  {
+    "width": 320,
+    "fixedTwoColumns": true,
+    "stablePositionsAcrossModes": true,
+    "noResultBackfill": true,
+    "withdrawals": true,
+    "exhaustion": true,
+    "advancedOneRow": true,
+    "viewport": 320,
+    "document": 320,
+    "errors": []
+  },
+  {
+    "width": 360,
+    "fixedTwoColumns": true,
+    "stablePositionsAcrossModes": true,
+    "noResultBackfill": true,
+    "withdrawals": true,
+    "exhaustion": true,
+    "advancedOneRow": true,
+    "viewport": 360,
+    "document": 360,
+    "errors": []
+  },
+  {
+    "width": 390,
+    "fixedTwoColumns": true,
+    "stablePositionsAcrossModes": true,
+    "noResultBackfill": true,
+    "withdrawals": true,
+    "exhaustion": true,
+    "advancedOneRow": true,
+    "viewport": 390,
+    "document": 390,
+    "errors": []
+  },
+  {
+    "width": 430,
+    "fixedTwoColumns": true,
+    "stablePositionsAcrossModes": true,
+    "noResultBackfill": true,
+    "withdrawals": true,
+    "exhaustion": true,
+    "advancedOneRow": true,
+    "viewport": 430,
+    "document": 430,
+    "errors": []
+  },
+  {
+    "width": 680,
+    "fixedTwoColumns": true,
+    "stablePositionsAcrossModes": true,
+    "noResultBackfill": true,
+    "withdrawals": true,
+    "exhaustion": true,
+    "advancedOneRow": true,
+    "viewport": 680,
+    "document": 680,
+    "errors": []
+  }
+]

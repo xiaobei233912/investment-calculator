@@ -1,0 +1,54 @@
+/* Local Chrome 61 fallbacks only; the main stylesheet remains the single design. */
+html { touch-action: manipulation; }
+body {
+  padding: 0;
+  padding-top: var(--safe-area-inset-top, 0px);
+  padding-right: var(--safe-area-inset-right, 0px);
+  padding-bottom: var(--safe-area-inset-bottom, 0px);
+  padding-left: var(--safe-area-inset-left, 0px);
+  -webkit-touch-callout: none;
+}
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    padding-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+    padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    padding-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  }
+}
+button:focus, select:focus, summary:focus, input:focus, .table-scroll:focus {
+  outline: 3px solid #94bfad;
+  outline-offset: 3px;
+}
+.mode-tabs, .table-scroll { -webkit-overflow-scrolling: touch; }
+.input-grid { grid-column-gap: 22px; grid-row-gap: 20px; }
+.settings-grid { grid-gap: 14px; }
+.result-summary { grid-gap: 18px 12px; }
+.mode-tabs, .form-heading, .section-heading, .calculate-button, .result-status,
+.headline-result, .chart-legend, .chart-legend > span, .chart-readout { gap: 0; }
+.mode-tab + .mode-tab { margin-left: 4px; }
+.form-heading > * + *, .section-heading > * + * { margin-left: 12px; }
+.calculate-button > svg { margin-left: 11px; }
+.result-status > span { margin-right: 6px; }
+.headline-result > * + * { margin-top: 8px; }
+.headline-result > span { margin-top: 11px; }
+.chart-legend > span + span, .chart-readout > span + span { margin-left: 20px; }
+.chart-legend i { margin-right: 7px; }
+.headline-value { font-size: 42px; }
+.headline-value, .result-summary dd, .chart-readout strong { overflow-wrap: break-word; word-break: break-word; }
+@supports (font-size: clamp(26px, 5.6vw, 42px)) {
+  .headline-value { font-size: clamp(26px, 5.6vw, 42px); }
+}
+@media (max-width: 440px) {
+  .mode-tab + .mode-tab { margin-left: 2px; }
+  .input-grid { grid-gap: 18px 12px; }
+  .settings-grid { grid-gap: 16px 12px; }
+  .result-summary { grid-gap: 13px; }
+  .result-summary > div { gap: 0; }
+  .result-summary dd { margin-left: 12px; }
+  .chart-legend > span + span { margin-left: 18px; }
+  .headline-value { font-size: 28px; }
+  @supports (font-size: clamp(24px, 7.4vw, 33px)) {
+    .headline-value { font-size: clamp(24px, 7.4vw, 33px); }
+  }
+}

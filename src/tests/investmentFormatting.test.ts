@@ -10,13 +10,42 @@ import {
 } from "../lib/investmentFormatting";
 
 describe("formatting and stable input", () => {
+  it.each([
+    [10000, "¥10,000.00"],
+    [-10000, "-¥10,000.00"],
+    [0, "¥0.00"],
+    [-0, "¥0.00"],
+    [0.004999, "¥0.00"],
+    [-0.004999, "¥0.00"],
+    [Number.MIN_VALUE, "¥0.00"],
+    [-Number.MIN_VALUE, "¥0.00"],
+    [0.005, "¥0.01"],
+    [-0.005, "-¥0.01"],
+  ])("formats signed amount %s as %s", (value, expected) => {
+    expect(formatAmount(value as number)).toBe(expected);
+  });
+  it.each([
+    [10, "约 10 年"],
+    [10.42, "约 10 年 5 个月"],
+    [0.42, "约 5 个月"],
+    [1 / 12, "约 1 个月"],
+    [0.08, "不足 1 个月"],
+    [0.01, "不足 1 个月"],
+    [0, "不足 1 个月"],
+    [11.9999, "约 12 年"],
+    [-1, "—"],
+    [NaN, "—"],
+    [Infinity, "—"],
+  ])("formats duration %s as %s", (value, expected) => {
+    expect(formatDuration(value as number)).toBe(expected);
+  });
   it("formats money, rates and fractional duration only at display time", () => {
     expect(formatAmount(198290.396358)).toBe("¥198,290.40");
     expect(formatRate(0.06)).toBe("6.00%");
     expect(formatRate(0.07123456789)).toBe("7.1235%");
     expect(formatYears(12.416666666)).toBe("12.42");
     expect(formatDuration(12.416666666)).toBe("约 12 年 5 个月");
-    expect(formatDuration(1.9999)).toBe("约 2 年 0 个月");
+    expect(formatDuration(1.9999)).toBe("约 2 年");
   });
   it.each([
     "",

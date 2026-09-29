@@ -11,6 +11,7 @@ export type ContributionTiming = "beginning" | "end";
 export interface InvestmentParameters {
   startingAmount: number;
   endAmount: number;
+  /** Signed per-period cash flow: positive deposits, negative withdrawals. */
   contribution: number;
   /** Decimal nominal annual rate: 0.06 means 6%. */
   returnRate: number;
@@ -36,6 +37,7 @@ export interface AnnualBreakdownItem {
 export interface GrowthPoint {
   year: number;
   assets: number;
+  /** Principal plus cumulative signed contributions; may be negative. */
   invested: number;
 }
 
